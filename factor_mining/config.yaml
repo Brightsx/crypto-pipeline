@@ -1,0 +1,36 @@
+# 挖因子程序配置文件
+data:
+  # 数据根目录
+  root_path: "../data_futures"
+  # 支持的币种列表
+  symbols: ["BTCUSDT", "ETHUSDT"]
+  # 可用的K线窗口期（目录名）
+  kline_windows: ["3s", "1m", "5m", "15m", "1h"]
+  # 数据文件名格式
+  file_pattern: "{symbol}-kline-{window}-{date}.parquet"
+
+factor:
+  # 因子计算频率（与K线窗口格式一致）
+  calc_frequency: "1m"
+  # 批处理天数（每次加载多少天的数据）
+  batch_days: 90
+  # 最大回看天数（用于rolling窗口，避免边界效应）
+  max_lookback_days: 30
+  # 因子计算时间范围
+  start_time: "2023-01-01 00:00:00"  # UTC时间
+  end_time: "2025-01-01 00:00:00"    # UTC时间
+  # 结果保存路径
+  output_path: "./factor_results"
+
+performance:
+  # 是否启用并行处理
+  enable_parallel: true
+  # 并行进程数（null表示使用CPU核数）
+  n_jobs: null
+  # 内存使用阈值（GB）
+  memory_threshold: 8
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "./logs/factor_mining.log"

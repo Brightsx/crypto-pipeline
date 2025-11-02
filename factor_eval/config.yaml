@@ -1,0 +1,81 @@
+# config.yaml
+# 因子评测配置文件
+
+# 合约配置
+symbols:
+  - BTCUSDT
+  - ETHUSDT
+
+# 文件路径配置
+paths:
+  factors_dir: "../factor_mining/factor_results"
+  returns_dir: "../returns_calculator/output"
+  output_dir: "evaluation_results"
+  
+  # 文件名模板
+  factors_template: "{symbol}_factors.parquet"
+  returns_template: "{symbol}_returns.parquet"
+
+# 评测参数
+evaluation:
+  # IC相关
+  ic_methods:
+    - pearson  # Pearson相关系数
+    - spearman  # Spearman秩相关系数
+  
+  # IC时间序列计算
+  ic_rolling_window: 240  # 滚动窗口大小（分钟）
+  ic_rolling_stride: 4  # 滚动步长因子（实际步长 = window / stride）
+  
+  # 分组回测参数
+  quantile_groups: 5  # 分成5组
+  
+  # 统计检验
+  significance_level: 0.05  # 显著性水平
+  
+  # 信息系数移动平均窗口
+  ic_ma_windows: [20, 60]  # 20分钟和60分钟移动平均
+  
+  # 因子衰减分析
+  decay_periods: [1, 5, 10, 20]  # 分析1/5/10/20分钟的衰减
+  
+  # 换手率分析
+  turnover_quantile: 0.2  # 分析top 20%的换手情况
+
+# 性能配置
+performance:
+  # 并行处理
+  enable_parallel: true  # 是否启用并行处理
+  n_jobs: 4  # 并行进程数，建议设置为CPU核心数
+  parallel_threshold: 10  # 因子数量超过此值时使用并行
+  
+  # 内存优化
+  chunk_size: 100  # 分块处理大小（暂未实现）
+  use_cache: false  # 是否使用缓存（暂未实现）
+
+# 输出配置
+output:
+  # 生成的报告类型
+  generate_summary_csv: true
+  generate_detailed_html: true
+  generate_plots: true
+  generate_ic_timeseries: true
+  
+  # 图表配置
+  plot_config:
+    figsize: [15, 10]
+    dpi: 100
+    style: "seaborn-v0_8-darkgrid"
+
+# 数据处理
+data_processing:
+  # 缺失值处理
+  min_valid_ratio: 0.5  # 至少50%的数据有效才保留该因子
+  
+  # 异常值处理
+  winsorize: true
+  winsorize_limits: [0.01, 0.99]  # 上下1%缩尾
+  
+  # 标准化
+  normalize_factors: true  # 是否标准化因子
+  normalize_method: "zscore"  # zscore或minmax

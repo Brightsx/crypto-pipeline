@@ -1,0 +1,38 @@
+# Binance合约收益率计算配置文件
+
+# 数据路径配置
+data:
+  base_path: "../data_futures"
+  kline_interval: "3s"  # 用于计算收益率的K线窗口
+  price_column: "vwap"  # 用于计算收益率的价格列
+
+# 时间配置 (UTC时间)
+time:
+  start_time: "2023-01-01 00:00:00"
+  end_time: "2025-01-01 00:00:00" 
+  interval: "1m"  # 计算间隔
+  
+# 收益率计算配置
+returns:
+  delays: ["9s"]  # 延迟时间(秒)，必须是K线窗口的倍数
+  periods: ["1m", "5m", "15m", "1h", "1d"]  # 收益率计算周期
+  
+# 性能优化配置
+performance:
+  batch_days: 1  # 每批处理天数
+  buffer_days: 2  # 缓冲天数，确保数据完整性
+  
+# 输出配置
+output:
+  base_path: "./output"
+  file_suffix: "_returns.parquet"
+  
+# 交易对配置
+symbols:
+  - "BTCUSDT"
+  - "ETHUSDT"
+  
+# 日志配置
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
