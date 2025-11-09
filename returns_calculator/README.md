@@ -1,57 +1,149 @@
-# 项目目录结构
-binance-returns-calculator/
-├── main.py                 # 主程序入口
-├── config.yaml            # 配置文件
-├── requirements.txt       # 依赖包
-├── src/
+# Binance Futures Return Calculator (UTC)
+
+高性能、结构清晰的币安合约收益率计算框架。  
+**所有时间均为 UTC**，支持任意时间分辨率（秒、分钟、小时等），通过延迟 × 周期组合计算收益率。  
+
+---
+
+## 📂 项目结构
+
+```
+binance_returns_refactored/
+├── main.py                      # 主入口（直接运行）
+├── binance_returns/             # 主包目录
 │   ├── __init__.py
-│   ├── config_manager.py   # 配置管理器
-│   ├── time_utils.py       # 时间工具类
-│   ├── data_loader.py      # 数据加载器
-│   └── returns_calculator.py # 收益率计算器
-├── output/                 # 输出目录
-└── logs/                   # 日志目录
+│   ├── config_loader.py         # 加载 YAML 配置
+│   ├── data_loader.py           # 高效读取每日 parquet 数据
+│   ├── return_calculator.py     # 收益率计算核心逻辑
+│   ├── utils.py                 # 日志与批次工具函数
+├── config/
+│   └── config.yaml              # 主配置文件
+├── logs/
+│   └── run.log                  # 运行日志
+├── output/
+│   └── (保存各交易对的计算结果)
+├── requirements.txt
+└── README.md
+```
 
-# 运行方式
-1. 安装依赖：
-   pip install -r requirements.txt
+---
 
-2. 修改配置文件 config.yaml：
-   - 设置数据路径
-   - 配置时间范围
-   - 设置交易对列表
-   - 调整计算参数
+## ⚙️ 功能概述
 
-3. 运行程序：
-   python main.py
+- **延迟 × 周期 组合收益率**  
+  例如配置中 `delays: ["9s","15s"]` 与 `periods: ["1m","5m"]`，则生成：
+  ```
+  ret_delay_9s_period_1m
+  ret_delay_9s_period_5m
+  ret_delay_15s_period_1m
+  ret_delay_15s_period_5m
+  ```
 
-# 配置文件说明
-config.yaml 中的主要配置项：
+- **向后找价格机制**  
+  若起始或结束价格为 `NaN`，算法会沿时间轴**向后（未来）**寻找最近可用价格；  
+  若两个价格最终落在同一时刻，则收益率自动为 0。
 
-- data.base_path: K线数据基础路径
-- data.kline_interval: 用于计算的K线窗口（如1m、3s等）
-- data.price_column: 价格列名（如vwap、close等）
+- **批处理机制**  
+  数据按配置的 `batch_days` 分批读取，每批再延长 `margin_days`，确保覆盖延迟与最长周期，避免重复 I/O。
 
-- time.start_time/end_time: 计算时间范围
-- time.interval: 计算间隔（如1m表示每分钟一个时间点）
+- **精确时间网格**  
+  按配置的 `interval`（如 `"1m"`）生成全局时间序列，每一分钟（或更细分）都计算收益率。  
+  全过程统一使用 `pandas.Timestamp(..., tz="UTC")`。
 
-- returns.delays: 延迟列表（秒为单位）
-- returns.periods: 收益率周期列表（如1m、1h、1d）
+- **最小 I/O 策略**  
+  只读取必要列（`start_time` 与价格列），跳过冗余字段，自动跳过缺失文件。
 
-- performance.batch_days: 每批处理天数
-- performance.buffer_days: 缓冲天数
+---
 
-- symbols: 要计算的交易对列表
+## 🧩 配置说明（`config/config.yaml`）
 
-# 输出格式
-生成的parquet文件包含：
-- index: UTC时间戳，格式为DatetimeIndex
-- columns: ret_delay_{延迟}s_period_{周期} 格式
-- 收益率单位为1（即0.01表示1%收益）
+```yaml
+symbols: ["BTCUSDT"]            # 要计算的合约/币种
 
-# 性能优化特性
-1. 分批处理：避免一次性加载所有数据
-2. 智能缓存：减少重复文件读取
-3. 内存管理：及时清理不需要的数据
-4. 异常处理：跳过有问题的数据文件
-5. 详细日志：监控计算进度
+data:
+  base_path: "../data_futures"  # 数据目录
+  kline_window: "3s"            # K线窗口类型，如 3s, 1m, 5m, 15m, 1h
+  price_column: "vwap"          # 收益率使用的价格列
+
+time_range:
+  start_time: "2023-01-01 00:00:00"
+  end_time:   "2025-01-01 00:00:00"
+  interval:   "1m"              # 计算间隔（每分钟一个点）
+
+returns:
+  delays: ["9s", "15s"]         # 延迟
+  periods: ["1m", "5m", "15m", "1h"]  # 收益率周期
+
+batch:
+  batch_days: 30                # 每批处理天数
+  margin_days: 7                # 右侧冗余天数，确保覆盖延迟+最长周期
+
+output:
+  dir: "output"                 # 输出目录
+  filename_pattern: "{symbol}_returns_{kline_window}_{interval}.parquet"
+```
+
+---
+
+## 🚀 使用方法
+
+### 1️⃣ 安装依赖
+```bash
+pip install -r requirements.txt
+```
+
+### 2️⃣ 运行主程序
+```bash
+python main.py
+```
+
+### 3️⃣ 查看日志
+实时查看运行进度与警告：
+```bash
+tail -f logs/run.log
+```
+
+---
+
+## 📊 输出结果格式
+
+输出文件路径（示例）：
+```
+output/BTCUSDT_returns_3s_1m.parquet
+```
+
+示例：
+```
+                           ret_delay_9s_period_1m  ret_delay_9s_period_5m  ret_delay_15s_period_1h
+timestamp
+2023-01-01 00:00:00+00:00                0.000119               -0.000406                -0.000719
+2023-01-01 00:01:00+00:00               -0.000185               -0.000385                -0.000838
+...
+2025-01-01 00:00:00+00:00                0.000616                0.001231                 0.008781
+```
+
+索引为 `DatetimeIndex`（UTC），列为所有延迟与周期组合，值为收益率（单位 1）。
+
+---
+
+## 💡 技术要点
+
+| 特性 | 说明 |
+|------|------|
+| 时间精度 | 秒、分钟、小时均可 |
+| 时区 | 全部为 UTC |
+| 缺失处理 | 向后补价，不向前填充 |
+| 性能优化 | 分批读取 + 向量化计算 |
+| 输出格式 | Parquet（Arrow，高压缩、高速读写） |
+
+---
+
+## 🧠 延伸功能建议
+- 支持 **多进程并行计算多个币种**
+- 增加 **断点续算**（检测已完成区间）
+- 输出 **统计报告（NaN 占比、收益率分布）**
+- 支持 **成本调整后的净收益**
+
+---
+
+**Made with ❤️ for quantitative research and data-driven trading pipelines.**

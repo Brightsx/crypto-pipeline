@@ -1,0 +1,60 @@
+utc: true
+symbols: [BTCUSDT, ETHUSDT]
+
+paths:
+  factors_pattern: "../factor_mining/factor_results/{symbol}_factors.parquet"
+  returns_pattern: "../returns_calculator/output/{symbol}_returns.parquet"
+
+columns:
+  include_factors: []     # empty -> use all columns
+  include_returns: []     # empty -> use all columns
+
+preprocess:
+  join_how: "inner"       # inner|outer|left|right
+  time_filter:
+    start_time: "2023-01-01 00:00:00"
+    end_time: "2025-01-01 00:00:00"
+  winsor:
+    enabled: true
+    method: "quantile"    # quantile|mad
+    q_low: 0.01
+    q_high: 0.99
+    mad_k: 5.0
+  standardize:
+    enabled: false
+  min_samples: 10000
+
+evaluation:
+  ic:
+    method: "both"        # pearson|spearman|both
+  regression:
+    newey_west:
+      enabled: true
+      default_lags: 10
+  quantile:
+    enabled: true
+    q: 5
+    compute_turnover: true
+
+stability:
+  ic_by_month: true
+  ic_by_hour: true
+  ic_by_wday: true
+  ic_decay: true
+
+annualization:
+  freq_by_period:
+    "1m": 525600
+    "5m": 105120
+    "15m": 35040
+    "1h": 8760
+    "1d": 365
+
+output:
+  save_csv: true
+  plots: true
+
+logging:
+  level_console: "INFO"
+  level_file: "DEBUG"
+  log_file: "logs/factor_eval.log"
