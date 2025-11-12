@@ -2,14 +2,16 @@ import argparse, logging, sys, time
 from pathlib import Path
 import numpy as np, pandas as pd
 
-from .config_loader import load_config, dump_config_snapshot
+from .config_loader import load_config
 from .io_utils import read_and_align
 from .preprocess import prepare_factors
 from .metrics import pearson_ic, spearman_ic, newey_west_beta
 from .portfolio import quantile_backtest
 from .stability import ic_by_month, ic_by_hour, ic_by_wday
 from .utils import timed, parse_delay_period
-from .plots import plot_ic_by_month, plot_ic_by_hour, plot_ic_by_wday, plot_ic_decay, plot_quantile_bars
+from .plots import (
+    plot_ic_by_month, plot_ic_by_hour, plot_ic_by_wday, plot_ic_decay, plot_quantile_bars
+)
 
 def setup_logger(cfg):
     logger = logging.getLogger("factor_eval")
@@ -26,6 +28,7 @@ def setup_logger(cfg):
     logger.addHandler(fh)
     return logger
 
+
 def evaluate_symbol(symbol, cfg, logger):
     import numpy as np
     import pandas as pd
@@ -33,6 +36,7 @@ def evaluate_symbol(symbol, cfg, logger):
     fpath = cfg["paths"]["factors_pattern"].format(symbol=symbol)
     rpath = cfg["paths"]["returns_pattern"].format(symbol=symbol)
     include_f, include_r = cfg["columns"]["include_factors"], cfg["columns"]["include_returns"]
+
     with timed(f"read & align {symbol}", logger):
         f_raw, r_raw = read_and_align(fpath, rpath, include_f, include_r, cfg['preprocess']['join_how'])
     logger.info(f"{symbol}: {f_raw.shape} factors, {r_raw.shape} returns")
@@ -57,7 +61,7 @@ def evaluate_symbol(symbol, cfg, logger):
     all_summary = []
     all_month, all_hour, all_wday, all_decay = [], [], [], []
 
-    # iterate per factor, and do per-factor plotting
+    # iterate per factor
     for f_idx, fcol in enumerate(f.columns, 1):
         logger.info(f"[{symbol}] factor {f_idx}/{len(f.columns)}: {fcol}")
         fac_month, fac_hour, fac_wday, fac_decay = [], [], [], []
@@ -71,28 +75,35 @@ def evaluate_symbol(symbol, cfg, logger):
             delay, period = parse_delay_period(rcol)
             icp, ics = pearson_ic(x,y), spearman_ic(x,y)
             reg = newey_west_beta(x,y) if cfg["evaluation"]["regression"]["newey_west"].get("enabled",True) else {}
-            all_summary.append(dict(symbol=symbol,factor=fcol,ret_col=rcol,ic=icp,rank_ic=ics,**reg))
+            all_summary.append(dict(symbol=symbol,factor=fcol,ret_col=rcol,ic_pearson=icp,ic_spearman=ics,**reg))
 
-            # stability rows (per factor & overall)
+            # stability rows (Spearman)
             s = ic_by_month(x,y)
             for ym, v in s.items():
-                row = dict(symbol=symbol,factor=fcol,ret_col=rcol,ym=ym,rank_ic=v)
-                fac_month.append(row); all_month.append(row)
+                fac_month.append(dict(metric="spearman",symbol=symbol,factor=fcol,ret_col=rcol,ym=ym,value=v))
             s = ic_by_hour(x,y)
             for h, v in s.items():
-                row = dict(symbol=symbol,factor=fcol,ret_col=rcol,hour=int(h),rank_ic=v)
-                fac_hour.append(row); all_hour.append(row)
+                fac_hour.append(dict(metric="spearman",symbol=symbol,factor=fcol,ret_col=rcol,hour=int(h),value=v))
             s = ic_by_wday(x,y)
             for d, v in s.items():
-                row = dict(symbol=symbol,factor=fcol,ret_col=rcol,wday=int(d),rank_ic=v)
-                fac_wday.append(row); all_wday.append(row)
-
-            # decay rows (need delay + period)
+                fac_wday.append(dict(metric="spearman",symbol=symbol,factor=fcol,ret_col=rcol,wday=int(d),value=v))
             if cfg["stability"].get("ic_decay", True):
-                row = dict(symbol=symbol,factor=fcol,delay=delay,period=period,rank_ic=ics)
-                fac_decay.append(row); all_decay.append(row)
+                fac_decay.append(dict(metric="spearman",symbol=symbol,factor=fcol,delay=delay,period=period,value=ics))
 
-            # quantiles per pair, and per-factor plot into factor dir
+            # Pearson版本稳定性
+            s = ic_by_month(x,y,method="pearson") if "method" in ic_by_month.__code__.co_varnames else ic_by_month(x,y)
+            for ym, v in s.items():
+                fac_month.append(dict(metric="pearson",symbol=symbol,factor=fcol,ret_col=rcol,ym=ym,value=v))
+            s = ic_by_hour(x,y,method="pearson") if "method" in ic_by_hour.__code__.co_varnames else ic_by_hour(x,y)
+            for h, v in s.items():
+                fac_hour.append(dict(metric="pearson",symbol=symbol,factor=fcol,ret_col=rcol,hour=int(h),value=v))
+            s = ic_by_wday(x,y,method="pearson") if "method" in ic_by_wday.__code__.co_varnames else ic_by_wday(x,y)
+            for d, v in s.items():
+                fac_wday.append(dict(metric="pearson",symbol=symbol,factor=fcol,ret_col=rcol,wday=int(d),value=v))
+            if cfg["stability"].get("ic_decay", True):
+                fac_decay.append(dict(metric="pearson",symbol=symbol,factor=fcol,delay=delay,period=period,value=icp))
+
+            # quantile plot
             if cfg["evaluation"]["quantile"].get("enabled", True):
                 q = int(cfg["evaluation"]["quantile"]["q"])
                 qres = quantile_backtest(x,y,q=q, compute_turnover=cfg["evaluation"]["quantile"].get("compute_turnover", True))
@@ -100,31 +111,33 @@ def evaluate_symbol(symbol, cfg, logger):
                     qpath = quant_dir / f"{fcol}__{rcol}.csv"
                     qres.to_csv(qpath, index=False)
                     if cfg["output"].get("plots", True):
-                        from .plots import plot_quantile_bars
-                        plot_quantile_bars(qres, fcol, rcol, str(plot_dir), logger)
+                        qplot_dir = plot_dir / fcol / "quantiles"
+                        plot_quantile_bars(qres, fcol, rcol, str(qplot_dir), logger)
             fac_pairs += 1
 
-        # per-factor plotting & log
+        # 绘图输出
         import pandas as pd
         if cfg["output"].get("plots", True):
-            if fac_month:
-                plot_ic_by_month(pd.DataFrame(fac_month), symbol, str(plot_dir), logger)
-            if fac_hour:
-                plot_ic_by_hour(pd.DataFrame(fac_hour), symbol, str(plot_dir), logger)
-            if fac_wday:
-                plot_ic_by_wday(pd.DataFrame(fac_wday), symbol, str(plot_dir), logger)
-            if fac_decay:
-                plot_ic_decay(pd.DataFrame(fac_decay), symbol, str(plot_dir), logger)
-            logger.info(f"[{symbol}] factor {fcol} — plots saved to {plot_dir/fcol} (pairs={fac_pairs})")
+            for metric in ["spearman", "pearson"]:
+                df_m = pd.DataFrame([r for r in fac_month if r["metric"] == metric])
+                df_h = pd.DataFrame([r for r in fac_hour if r["metric"] == metric])
+                df_w = pd.DataFrame([r for r in fac_wday if r["metric"] == metric])
+                df_d = pd.DataFrame([r for r in fac_decay if r["metric"] == metric])
+                base_dir = plot_dir / fcol / metric
+                if not df_m.empty: plot_ic_by_month(df_m, symbol, str(base_dir), logger, metric)
+                if not df_h.empty: plot_ic_by_hour(df_h, symbol, str(base_dir), logger, metric)
+                if not df_w.empty: plot_ic_by_wday(df_w, symbol, str(base_dir), logger, metric)
+                if not df_d.empty: plot_ic_decay(df_d, symbol, str(base_dir), logger, metric)
+            logger.info(f"[{symbol}] factor {fcol} plots saved to {plot_dir/fcol} (pairs={fac_pairs})")
 
-    # save overall CSVs once
-    import pandas as pd
+    # 汇总
     pd.DataFrame(all_summary).to_csv(per_dir/"summary_factor_metrics.csv", index=False)
     if all_month: pd.DataFrame(all_month).to_csv(stab_dir/"ic_by_month.csv", index=False)
     if all_hour: pd.DataFrame(all_hour).to_csv(stab_dir/"ic_by_hour.csv", index=False)
     if all_wday: pd.DataFrame(all_wday).to_csv(stab_dir/"ic_by_wday.csv", index=False)
     if all_decay: pd.DataFrame(all_decay).to_csv(stab_dir/"ic_decay.csv", index=False)
     logger.info(f"[{symbol}] evaluation completed. Reports at {per_dir}")
+
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--config", required=True)

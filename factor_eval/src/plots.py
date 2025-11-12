@@ -4,77 +4,78 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 def ensure_dir(p): Path(p).mkdir(parents=True, exist_ok=True)
+def _style(): plt.style.use("seaborn-v0_8-whitegrid")
 
-def _style():
-    plt.style.use("seaborn-v0_8-whitegrid")
-
-def plot_ic_by_month(df, symbol, out_dir, logger):
+def plot_ic_by_month(df, symbol, out_dir, logger, metric="spearman"):
     _style()
     for (fac, ret), sub in df.groupby(["factor","ret_col"]):
-        fac_dir = Path(out_dir) / fac
-        ensure_dir(fac_dir)
-        xs = list(sub["ym"]); ys = list(sub["rank_ic"])
+        outp = Path(out_dir)
+        ensure_dir(outp)
+        xs = list(sub["ym"]); ys = list(sub["value"])
         plt.figure(figsize=(9,4))
         plt.plot(xs, ys, marker="o")
-        plt.title(f"RankIC by Month — {fac} & {ret}")
-        plt.xlabel("Year-Month"); plt.ylabel("RankIC"); plt.xticks(rotation=45, ha="right")
-        plt.tight_layout(); plt.savefig(fac_dir / f"ic_by_month__{ret}.png", dpi=150); plt.close()
-    logger.info(f"[{symbol}] IC-by-month plots saved per factor.")
+        plt.title(f"{metric.title()} IC by Month — {fac} & {ret}")
+        plt.xlabel("Year-Month"); plt.ylabel("IC"); plt.xticks(rotation=45, ha="right")
+        plt.tight_layout(); plt.savefig(outp / f"ic_by_month__{ret}.png", dpi=150); plt.close()
+    logger.info(f"[{symbol}] {metric} IC-by-month plots saved at {out_dir}")
 
-def plot_ic_by_hour(df, symbol, out_dir, logger):
+def plot_ic_by_hour(df, symbol, out_dir, logger, metric="spearman"):
     _style()
     for (fac, ret), sub in df.groupby(["factor","ret_col"]):
-        fac_dir = Path(out_dir) / fac
-        ensure_dir(fac_dir)
-        xs = list(sub.sort_values("hour")["hour"]); ys = list(sub.sort_values("hour")["rank_ic"])
+        outp = Path(out_dir)
+        ensure_dir(outp)
+        xs = list(sub.sort_values("hour")["hour"]); ys = list(sub.sort_values("hour")["value"])
         plt.figure(figsize=(7,4))
         plt.bar(xs, ys)
-        plt.title(f"RankIC by Hour — {fac} & {ret}")
-        plt.xlabel("Hour (0-23)"); plt.ylabel("RankIC")
-        plt.tight_layout(); plt.savefig(fac_dir / f"ic_by_hour__{ret}.png", dpi=150); plt.close()
-    logger.info(f"[{symbol}] IC-by-hour plots saved per factor.")
+        plt.title(f"{metric.title()} IC by Hour — {fac} & {ret}")
+        plt.xlabel("Hour (0-23)"); plt.ylabel("IC")
+        plt.tight_layout(); plt.savefig(outp / f"ic_by_hour__{ret}.png", dpi=150); plt.close()
+    logger.info(f"[{symbol}] {metric} IC-by-hour plots saved at {out_dir}")
 
-def plot_ic_by_wday(df, symbol, out_dir, logger):
+def plot_ic_by_wday(df, symbol, out_dir, logger, metric="spearman"):
     _style()
     for (fac, ret), sub in df.groupby(["factor","ret_col"]):
-        fac_dir = Path(out_dir) / fac
-        ensure_dir(fac_dir)
-        xs = list(sub.sort_values("wday")["wday"]); ys = list(sub.sort_values("wday")["rank_ic"])
+        outp = Path(out_dir)
+        ensure_dir(outp)
+        xs = list(sub.sort_values("wday")["wday"]); ys = list(sub.sort_values("wday")["value"])
         plt.figure(figsize=(7,4))
         plt.bar(xs, ys)
-        plt.title(f"RankIC by Weekday — {fac} & {ret}")
-        plt.xlabel("Weekday (Mon=0)"); plt.ylabel("RankIC")
-        plt.tight_layout(); plt.savefig(fac_dir / f"ic_by_wday__{ret}.png", dpi=150); plt.close()
-    logger.info(f"[{symbol}] IC-by-wday plots saved per factor.")
+        plt.title(f"{metric.title()} IC by Weekday — {fac} & {ret}")
+        plt.xlabel("Weekday (Mon=0)"); plt.ylabel("IC")
+        plt.tight_layout(); plt.savefig(outp / f"ic_by_wday__{ret}.png", dpi=150); plt.close()
+    logger.info(f"[{symbol}] {metric} IC-by-wday plots saved at {out_dir}")
 
 def _period_key(p):
     import re
     m = re.match(r"(\d+)([smhd])", str(p))
     if not m: return 0
     n,u = int(m.group(1)), m.group(2)
-    return n if u=='m' else (n*60 if u=='h' else (n*1440 if u=='d' else max(1,n//60)))
+    if u == 's': return max(1, n//60)
+    if u == 'm': return n
+    if u == 'h': return n*60
+    if u == 'd': return n*1440
+    return n
 
-def plot_ic_decay(df, symbol, out_dir, logger):
+def plot_ic_decay(df, symbol, out_dir, logger, metric="spearman"):
     _style()
     for fac, sub in df.groupby("factor"):
-        fac_dir = Path(out_dir) / fac
-        ensure_dir(fac_dir)
-        # group by delay, plot colored lines
+        outp = Path(out_dir)
+        ensure_dir(outp)
         plt.figure(figsize=(9,4))
         for delay, subd in sub.groupby("delay"):
             subd = subd.sort_values("period", key=lambda s: s.map(_period_key))
-            xs = list(subd["period"]); ys = list(subd["rank_ic"])
+            xs = list(subd["period"]); ys = list(subd["value"])
             plt.plot(xs, ys, marker="o", label=f"delay={delay}")
         plt.legend(title="Delay")
-        plt.title(f"IC-Decay — {fac}")
-        plt.xlabel("Period"); plt.ylabel("RankIC")
-        plt.tight_layout(); plt.savefig(fac_dir / "ic_decay.png", dpi=150); plt.close()
-    logger.info(f"[{symbol}] IC-decay plots saved per factor.")
+        plt.title(f"{metric.title()} IC-Decay — {fac}")
+        plt.xlabel("Period"); plt.ylabel("IC")
+        plt.tight_layout(); plt.savefig(outp / "ic_decay.png", dpi=150); plt.close()
+    logger.info(f"[{symbol}] {metric} IC-decay plots saved at {out_dir}")
 
 def plot_quantile_bars(df_pair, fcol, rcol, out_dir, logger):
     _style()
-    fac_dir = Path(out_dir) / fcol
-    ensure_dir(fac_dir)
+    outp = Path(out_dir)
+    ensure_dir(outp)
     nb = df_pair[(df_pair["bin"]>=1) & (df_pair["bin"]<=50)]
     if nb.empty: return
     xs = list(nb["bin"]); ys = list(nb["mean"])
@@ -82,5 +83,5 @@ def plot_quantile_bars(df_pair, fcol, rcol, out_dir, logger):
     plt.bar(xs, ys)
     plt.title(f"Quantile Returns — {fcol} & {rcol}")
     plt.xlabel("Quantile bin"); plt.ylabel("Mean future return")
-    plt.tight_layout(); plt.savefig(fac_dir / f"quantiles__{rcol}.png", dpi=150); plt.close()
-    logger.info(f"Quantile plot saved: {fac_dir / f'quantiles__{rcol}.png'}")
+    plt.tight_layout(); plt.savefig(outp / f"quantiles__{rcol}.png", dpi=150); plt.close()
+    logger.info(f"Quantile plot saved: {outp / f'quantiles__{rcol}.png'}")
