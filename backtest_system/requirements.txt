@@ -1,18 +1,4 @@
-# 多币种合约回测系统依赖包
 
-# 数据处理
-pandas>=1.5.0
-numpy>=1.23.0
-
-# 文件格式支持
-pyarrow>=10.0.0
-
-# 配置文件解析
-pyyaml>=6.0
-
-# 可选：数据可视化（用于分析结果）
-# matplotlib>=3.6.0
-# seaborn>=0.12.0
-
-# 可选：性能分析
-# memory_profiler>=0.60.0
+pandas
+numpy
+pyyaml

@@ -1,60 +1,45 @@
-# 回测配置文件
+
 backtest:
-  start_time: "2023-01-01 00:00:00"  # 回测开始时间 (UTC)
-  end_time: "2023-01-04 00:00:00"    # 回测结束时间 (UTC)
-  frequency: "15min"                  # 回测频率: 30s, 1min, 15min, 1h等
-  initial_usdt: 100000.0              # 初始USDT保证金
-  symbols:                            # 回测币种列表
-    - BTCUSDT
-    - ETHUSDT
+  start_time: "2023-01-01 00:00:00"
+  end_time: "2023-01-02 00:00:00"
+  frequency: "1min"
+  initial_usdt: 100000
+  symbols: ["BTCUSDT", "ETHUSDT"]
 
-# 数据加载配置
-data_loader:
-  # aggtrade数据配置
-  aggtrade:
-    path_template: "../data_futures/{symbol}/aggTrades/{symbol}-aggTrades-{YYYY}-{MM}-{DD}.parquet"
-    time_unit: "ms"                   # 时间单位: s/ms
-    loader_class: "aggtrade_loader.AggTradeLoader"
-    
-  # 信号数据配置
-  signal:
-    timestamp_path: "../signals/timestamps.npy"
-    signal_path: "../signals/signals.npy"
-    time_unit: "ms"                   # 时间单位: s/ms
-    loader_class: "signal_loader.SignalLoader"
-    
-  # 资金费率配置
-  funding_rate:
-    path_template: "../data_futures/{symbol}/fundingRate/{symbol}-fundingRate-{YYYY}-{MM}.parquet"
-    time_unit: "ms"                   # 时间单位: s/ms
-    loader_class: "funding_rate_loader.FundingRateLoader"
-
-# 优化器配置
-optimizer:
-  class_name: "simple_optimizer.SimpleOptimizer"
-  params:
-    signal_multiplier: 10.0           # 信号到仓位的线性系数
-    max_position_value: 50000.0       # 单币种最大持仓价值(USDT)
-    leverage: 3.0                     # 杠杆倍数
-
-# 执行器配置
-executor:
-  class_name: "executor.Executor"
-  params:
-    execution_delay: 10               # 执行延迟(秒)
-    execution_window: 20              # 成交窗口(秒)
-    fee_rate: 0.0004                  # 手续费率(taker)
-    slippage_rate: 0.0001             # 滑点率
-    max_volume_pct: 0.10              # 最大成交量占比
-
-# 统计记录配置
-metrics:
-  output_dir: "./results"
-  trade_log_file: "trade_log.csv"
-  position_log_file: "position_log.csv"
-  
-# 日志配置
 logging:
-  level: "INFO"                       # DEBUG, INFO, WARNING, ERROR
+  level: "INFO"
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
   date_format: "%Y-%m-%d %H:%M:%S"
+
+data_loader:
+  aggtrade:
+    time_unit: "ms"
+    path_template: "../data_futures/{symbol}/aggTrades/{symbol}-aggTrades-{YYYY}-{MM}-{DD}.parquet"
+  signal:
+    time_unit: "ms"
+    timestamp_path: "../signals/timestamps.npy"
+    signal_path: "../signals/signals.npy"
+  funding_rate:
+    time_unit: "ms"
+    path_template: "../data_futures/{symbol}/fundingRate/{symbol}-fundingRate-{YYYY}-{MM}.parquet"
+
+optimizer:
+  class: "optimizer.simple_optimizer.SimpleOptimizer"
+  params:
+    signal_multiplier: 0.1
+    max_position_value: 50000.0
+    leverage: 1.0
+
+executor:
+  class: "executor.executor.Executor"
+  params:
+    execution_delay: 10
+    execution_window: 20
+    fee_rate: 0.0004
+    slippage_rate: 0.0001
+    max_volume_pct: 0.10
+
+metrics:
+  paths:
+    trade_log: "logs/trade_log.csv"
+    state_log: "logs/state_log.csv"
